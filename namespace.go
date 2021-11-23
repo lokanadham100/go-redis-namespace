@@ -10,47 +10,67 @@ import (
 const namespaceSeperator = ":"
 
 var _ redis.Cmdable = (*redisNamespace)(nil)
-var _ redis.Pipeliner = (*redisPipelineNamespace)(nil)
+var _ redis.Pipeliner = (*redisNamespace)(nil)
 
 type redisNamespace struct {
 	namespace string
 	redis.Cmdable
 }
 
-func NewRedisNamespace(namespace string, client redis.Cmdable) *redisNamespace {
+func NewRedisNamespace(namespace string, client redis.Cmdable) redis.Cmdable {
 	return &redisNamespace{
 		namespace: namespace,
 		Cmdable:   client,
 	}
 }
 
-type redisPipelineNamespace struct {
-	redis.Pipeliner
-	redis.Cmdable
+func (rn *redisNamespace) Pipeline() redis.Pipeliner {
+	pipeline := rn.Cmdable.Pipeline()
+	if len(rn.namespace) == 0 {
+		return pipeline
+	}
+	return &redisNamespace{
+		rn.namespace,
+		pipeline,
+	}
 }
 
-// func (rn *redisNamespace) Pipeline() redis.Pipeliner {
-// 	p := rn.Cmdable.Pipeline()
-// 	return &redisPipelineNamespace{
-// 		Pipeliner: p,
-// 		Cmdable: &redisNamespace{
-// 			namespace: rn.namespace,
-// 			Cmdable:   p,
-// 		},
-// 	}
-// }
+func (rn *redisNamespace) Pipelined(ctx context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
+	if len(rn.namespace) == 0 {
+		return rn.Cmdable.Pipelined(ctx, fn)
+	}
+	newfn := func(pipeline redis.Pipeliner) error {
+		return fn(&redisNamespace{
+			rn.namespace,
+			pipeline,
+		})
+	}
+	return rn.Cmdable.Pipelined(ctx, newfn)
+}
 
-// func (rn *redisNamespace) Pipelined(ctx context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
-// 	return mockArgs.Get(0).([]redis.Cmder), mockArgs.Get(1).(error)
-// }
+func (rn *redisNamespace) TxPipelined(ctx context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
+	if len(rn.namespace) == 0 {
+		return rn.Cmdable.TxPipelined(ctx, fn)
+	}
+	newfn := func(pipeline redis.Pipeliner) error {
+		return fn(&redisNamespace{
+			rn.namespace,
+			pipeline,
+		})
+	}
+	return rn.Cmdable.TxPipelined(ctx, newfn)
+}
 
-// func (rn *redisNamespace) TxPipelined(ctx context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
-// 	return mockArgs.Get(0).([]redis.Cmder), mockArgs.Get(1).(error)
-// }
-
-// func (rn *redisNamespace) TxPipeline() redis.Pipeliner {
-// 	return m.Called().Get(0).(redis.Pipeliner)
-// }
+func (rn *redisNamespace) TxPipeline() redis.Pipeliner {
+	pipeline := rn.Cmdable.TxPipeline()
+	if len(rn.namespace) == 0 {
+		return pipeline
+	}
+	return &redisNamespace{
+		rn.namespace,
+		pipeline,
+	}
+}
 
 func (rn *redisNamespace) Del(ctx context.Context, keys ...string) *redis.IntCmd {
 	return rn.Del(ctx, rn.appendNamespaceToKeys(keys)...)
@@ -438,6 +458,411 @@ func (rn *redisNamespace) MemoryUsage(ctx context.Context, key string, samples .
 
 func (rn *redisNamespace) ScanType(ctx context.Context, cursor uint64, match string, count int64, keyType string) *redis.ScanCmd {
 	return rn.ScanType(ctx, cursor, rn.appendNamespaceToKey(match), count, keyType)
+}
+
+func (rn *redisNamespace) HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd {
+	return rn.HDel(ctx, rn.appendNamespaceToKey(key), fields...)
+}
+
+func (rn *redisNamespace) HExists(ctx context.Context, key, field string) *redis.BoolCmd {
+	return rn.HExists(ctx, rn.appendNamespaceToKey(key), field)
+}
+
+func (rn *redisNamespace) HGet(ctx context.Context, key, field string) *redis.StringCmd {
+	return rn.HGet(ctx, rn.appendNamespaceToKey(key), field)
+}
+
+func (rn *redisNamespace) HGetAll(ctx context.Context, key string) *redis.StringStringMapCmd {
+	return rn.HGetAll(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) HIncrBy(ctx context.Context, key, field string, incr int64) *redis.IntCmd {
+	return rn.HIncrBy(ctx, rn.appendNamespaceToKey(key), field, incr)
+}
+
+func (rn *redisNamespace) HIncrByFloat(ctx context.Context, key, field string, incr float64) *redis.FloatCmd {
+	return rn.HIncrByFloat(ctx, rn.appendNamespaceToKey(key), field, incr)
+}
+
+func (rn *redisNamespace) HKeys(ctx context.Context, key string) *redis.StringSliceCmd {
+	return rn.HKeys(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) HLen(ctx context.Context, key string) *redis.IntCmd {
+	return rn.HLen(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) HMGet(ctx context.Context, key string, fields ...string) *redis.SliceCmd {
+	return rn.HMGet(ctx, rn.appendNamespaceToKey(key), fields...)
+}
+
+func (rn *redisNamespace) HMSet(ctx context.Context, key string, fields ...interface{}) *redis.BoolCmd {
+	return rn.HMSet(ctx, rn.appendNamespaceToKey(key), fields...)
+}
+
+func (rn *redisNamespace) HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+	return rn.HSet(ctx, rn.appendNamespaceToKey(key), values...)
+}
+
+func (rn *redisNamespace) HSetNX(ctx context.Context, key, field string, value interface{}) *redis.BoolCmd {
+	return rn.HSetNX(ctx, rn.appendNamespaceToKey(key), field, value)
+}
+
+func (rn *redisNamespace) HVals(ctx context.Context, key string) *redis.StringSliceCmd {
+	return rn.HVals(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) HScan(ctx context.Context, key string, cursor uint64, match string, count int64) *redis.ScanCmd {
+	return rn.HScan(ctx, rn.appendNamespaceToKey(key), cursor, match, count)
+}
+
+func (rn *redisNamespace) SAdd(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	return rn.SAdd(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) SCard(ctx context.Context, key string) *redis.IntCmd {
+	return rn.SCard(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) SDiff(ctx context.Context, keys ...string) *redis.StringSliceCmd {
+	return rn.SDiff(ctx, rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) SDiffStore(ctx context.Context, destination string, keys ...string) *redis.IntCmd {
+	return rn.SDiffStore(ctx, rn.appendNamespaceToKey(destination), rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) SInter(ctx context.Context, keys ...string) *redis.StringSliceCmd {
+	return rn.SInter(ctx, rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) SInterStore(ctx context.Context, destination string, keys ...string) *redis.IntCmd {
+	return rn.SInterStore(ctx, rn.appendNamespaceToKey(destination), rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) SIsMember(ctx context.Context, key string, member interface{}) *redis.BoolCmd {
+	return rn.SIsMember(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) SMembers(ctx context.Context, key string) *redis.StringSliceCmd {
+	return rn.SMembers(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) SMembersMap(ctx context.Context, key string) *redis.StringStructMapCmd {
+	return rn.SMembersMap(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) SMove(ctx context.Context, source, destination string, member interface{}) *redis.BoolCmd {
+	return rn.SMove(ctx, rn.appendNamespaceToKey(source), rn.appendNamespaceToKey(destination), member)
+}
+
+func (rn *redisNamespace) SPop(ctx context.Context, key string) *redis.StringCmd {
+	return rn.SPop(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) SPopN(ctx context.Context, key string, count int64) *redis.StringSliceCmd {
+	return rn.SPopN(ctx, rn.appendNamespaceToKey(key), count)
+}
+
+func (rn *redisNamespace) SRandMember(ctx context.Context, key string) *redis.StringCmd {
+	return rn.SRandMember(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) SRandMemberN(ctx context.Context, key string, count int64) *redis.StringSliceCmd {
+	return rn.SRandMemberN(ctx, rn.appendNamespaceToKey(key), count)
+}
+
+func (rn *redisNamespace) SRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	return rn.SRem(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) SUnion(ctx context.Context, keys ...string) *redis.StringSliceCmd {
+	return rn.SUnion(ctx, rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) SUnionStore(ctx context.Context, destination string, keys ...string) *redis.IntCmd {
+	return rn.SUnionStore(ctx, rn.appendNamespaceToKey(destination), rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error {
+	return rn.Watch(ctx, fn, rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) XDel(ctx context.Context, stream string, ids ...string) *redis.IntCmd {
+	return rn.XDel(ctx, rn.appendNamespaceToKey(stream), ids...)
+}
+
+func (rn *redisNamespace) XAdd(ctx context.Context, a *redis.XAddArgs) *redis.StringCmd {
+	return rn.XAdd(ctx, a)
+}
+
+func (rn *redisNamespace) XLen(ctx context.Context, stream string) *redis.IntCmd {
+	return rn.XLen(ctx, rn.appendNamespaceToKey(stream))
+}
+
+func (rn *redisNamespace) XRange(ctx context.Context, stream, start, stop string) *redis.XMessageSliceCmd {
+	return rn.XRange(ctx, rn.appendNamespaceToKey(stream), start, stop)
+}
+
+func (rn *redisNamespace) XRangeN(ctx context.Context, stream, start, stop string, count int64) *redis.XMessageSliceCmd {
+	return rn.XRangeN(ctx, rn.appendNamespaceToKey(stream), start, stop, count)
+}
+
+func (rn *redisNamespace) XRead(ctx context.Context, a *redis.XReadArgs) *redis.XStreamSliceCmd {
+	return rn.XRead(ctx, a)
+}
+
+func (rn *redisNamespace) XRevRange(ctx context.Context, stream string, start, stop string) *redis.XMessageSliceCmd {
+	return rn.XRevRange(ctx, rn.appendNamespaceToKey(stream), start, stop)
+}
+
+func (rn *redisNamespace) XRevRangeN(ctx context.Context, stream string, start, stop string, count int64) *redis.XMessageSliceCmd {
+	return rn.XRevRangeN(ctx, rn.appendNamespaceToKey(stream), start, stop, count)
+}
+
+func (rn *redisNamespace) XAck(ctx context.Context, stream, group string, ids ...string) *redis.IntCmd {
+	return rn.XAck(ctx, rn.appendNamespaceToKey(stream), group, ids...)
+}
+
+func (rn *redisNamespace) XClaim(ctx context.Context, a *redis.XClaimArgs) *redis.XMessageSliceCmd {
+	return rn.XClaim(ctx, a)
+}
+
+func (rn *redisNamespace) XClaimJustID(ctx context.Context, a *redis.XClaimArgs) *redis.StringSliceCmd {
+	return rn.XClaimJustID(ctx, a)
+}
+
+func (rn *redisNamespace) XGroupCreate(ctx context.Context, stream, group, start string) *redis.StatusCmd {
+	return rn.XGroupCreate(ctx, rn.appendNamespaceToKey(stream), group, start)
+}
+
+func (rn *redisNamespace) XGroupDelConsumer(ctx context.Context, stream, group, consumer string) *redis.IntCmd {
+	return rn.XGroupDelConsumer(ctx, rn.appendNamespaceToKey(stream), group, consumer)
+}
+
+func (rn *redisNamespace) XGroupDestroy(ctx context.Context, stream, group string) *redis.IntCmd {
+	return rn.XGroupDestroy(ctx, rn.appendNamespaceToKey(stream), group)
+}
+
+func (rn *redisNamespace) XGroupSetID(ctx context.Context, stream, group, start string) *redis.StatusCmd {
+	return rn.XGroupSetID(ctx, rn.appendNamespaceToKey(stream), group, start)
+}
+
+func (rn *redisNamespace) XPending(ctx context.Context, stream, group string) *redis.XPendingCmd {
+	return rn.XPending(ctx, rn.appendNamespaceToKey(stream), group)
+}
+
+func (rn *redisNamespace) XPendingExt(ctx context.Context, a *redis.XPendingExtArgs) *redis.XPendingExtCmd {
+	return rn.XPendingExt(ctx, a)
+}
+
+func (rn *redisNamespace) XReadGroup(ctx context.Context, a *redis.XReadGroupArgs) *redis.XStreamSliceCmd {
+	return rn.XReadGroup(ctx, a)
+}
+
+func (rn *redisNamespace) XReadStreams(ctx context.Context, streams ...string) *redis.XStreamSliceCmd {
+	return rn.XReadStreams(ctx, rn.appendNamespaceToKeys(streams)...)
+}
+
+func (rn *redisNamespace) XTrim(ctx context.Context, key string, maxLen int64) *redis.IntCmd {
+	return rn.XTrim(ctx, rn.appendNamespaceToKey(key), maxLen)
+}
+
+func (rn *redisNamespace) XTrimApprox(ctx context.Context, key string, maxLen int64) *redis.IntCmd {
+	return rn.XTrimApprox(ctx, rn.appendNamespaceToKey(key), maxLen)
+}
+
+func (rn *redisNamespace) XGroupCreateMkStream(ctx context.Context, stream, group, start string) *redis.StatusCmd {
+	return rn.XGroupCreateMkStream(ctx, rn.appendNamespaceToKey(stream), group, start)
+}
+
+func (rn *redisNamespace) XInfoGroups(ctx context.Context, key string) *redis.XInfoGroupsCmd {
+	return rn.XInfoGroups(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) XInfoStream(ctx context.Context, key string) *redis.XInfoStreamCmd {
+	return rn.XInfoStream(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) BZPopMax(ctx context.Context, timeout time.Duration, keys ...string) *redis.ZWithKeyCmd {
+	return rn.BZPopMax(ctx, timeout, rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) BZPopMin(ctx context.Context, timeout time.Duration, keys ...string) *redis.ZWithKeyCmd {
+	return rn.BZPopMin(ctx, timeout, rn.appendNamespaceToKeys(keys)...)
+}
+
+func (rn *redisNamespace) ZPopMax(ctx context.Context, key string, count ...int64) *redis.ZSliceCmd {
+	return rn.ZPopMax(ctx, rn.appendNamespaceToKey(key), count...)
+}
+
+func (rn *redisNamespace) ZPopMin(ctx context.Context, key string, count ...int64) *redis.ZSliceCmd {
+	return rn.ZPopMin(ctx, rn.appendNamespaceToKey(key), count...)
+}
+
+func (rn *redisNamespace) ZScan(ctx context.Context, key string, cursor uint64, match string, count int64) *redis.ScanCmd {
+	return rn.ZScan(ctx, rn.appendNamespaceToKey(key), cursor, match, count)
+}
+
+func (rn *redisNamespace) ZAdd(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
+	return rn.ZAdd(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZAddNX(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
+	return rn.ZAddNX(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZAddXX(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
+	return rn.ZAddXX(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZAddCh(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
+	return rn.ZAddCh(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZAddNXCh(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
+	return rn.ZAddNXCh(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZAddXXCh(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
+	return rn.ZAddXXCh(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZIncr(ctx context.Context, key string, member *redis.Z) *redis.FloatCmd {
+	return rn.ZIncr(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) ZIncrNX(ctx context.Context, key string, member *redis.Z) *redis.FloatCmd {
+	return rn.ZIncrNX(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) ZIncrXX(ctx context.Context, key string, member *redis.Z) *redis.FloatCmd {
+	return rn.ZIncrXX(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) ZCard(ctx context.Context, key string) *redis.IntCmd {
+	return rn.ZCard(ctx, rn.appendNamespaceToKey(key))
+}
+
+func (rn *redisNamespace) ZCount(ctx context.Context, key, min, max string) *redis.IntCmd {
+	return rn.ZCount(ctx, rn.appendNamespaceToKey(key), min, max)
+}
+
+func (rn *redisNamespace) ZLexCount(ctx context.Context, key, min, max string) *redis.IntCmd {
+	return rn.ZLexCount(ctx, rn.appendNamespaceToKey(key), min, max)
+}
+
+func (rn *redisNamespace) ZIncrBy(ctx context.Context, key string, increment float64, member string) *redis.FloatCmd {
+	return rn.ZIncrBy(ctx, rn.appendNamespaceToKey(key), increment, member)
+}
+
+func (rn *redisNamespace) ZInterStore(ctx context.Context, destination string, store *redis.ZStore) *redis.IntCmd {
+	store.keys = rn.appendNamespaceToKeys(store.keys)
+	return rn.ZInterStore(ctx, rn.appendNamespaceToKey(destination), store)
+}
+
+func (rn *redisNamespace) ZRange(ctx context.Context, key string, start, stop int64) *redis.StringSliceCmd {
+	return rn.ZRange(ctx, rn.appendNamespaceToKey(key), start, stop)
+}
+
+func (rn *redisNamespace) ZRangeWithScores(ctx context.Context, key string, start, stop int64) *redis.ZSliceCmd {
+	return rn.ZRangeWithScores(ctx, rn.appendNamespaceToKey(key), start, stop)
+}
+
+func (rn *redisNamespace) ZRangeByScore(ctx context.Context, key string, opt *redis.ZRangeBy) *redis.StringSliceCmd {
+	return rn.ZRangeByScore(ctx, rn.appendNamespaceToKey(key), opt)
+}
+
+func (rn *redisNamespace) ZRangeByLex(ctx context.Context, key string, opt *redis.ZRangeBy) *redis.StringSliceCmd {
+	return rn.ZRangeByLex(ctx, rn.appendNamespaceToKey(key), opt)
+}
+
+func (rn *redisNamespace) ZRangeByScoreWithScores(ctx context.Context, key string, opt *redis.ZRangeBy) *redis.ZSliceCmd {
+	return rn.ZRangeByScoreWithScores(ctx, rn.appendNamespaceToKey(key), opt)
+}
+
+func (rn *redisNamespace) ZRank(ctx context.Context, key, member string) *redis.IntCmd {
+	return rn.ZRank(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) ZRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	return rn.ZRem(ctx, rn.appendNamespaceToKey(key), members...)
+}
+
+func (rn *redisNamespace) ZRemRangeByRank(ctx context.Context, key string, start, stop int64) *redis.IntCmd {
+	return rn.ZRemRangeByRank(ctx, rn.appendNamespaceToKey(key), start, stop)
+}
+
+func (rn *redisNamespace) ZRemRangeByScore(ctx context.Context, key, min, max string) *redis.IntCmd {
+	return rn.ZRemRangeByScore(ctx, rn.appendNamespaceToKey(key), min, max)
+}
+
+func (rn *redisNamespace) ZRemRangeByLex(ctx context.Context, key, min, max string) *redis.IntCmd {
+	return rn.ZRemRangeByLex(ctx, rn.appendNamespaceToKey(key), min, max)
+}
+
+func (rn *redisNamespace) ZRevRange(ctx context.Context, key string, start, stop int64) *redis.StringSliceCmd {
+	return rn.ZRevRange(ctx, rn.appendNamespaceToKey(key), start, stop)
+}
+
+func (rn *redisNamespace) ZRevRangeWithScores(ctx context.Context, key string, start, stop int64) *redis.ZSliceCmd {
+	return rn.ZRevRangeWithScores(ctx, rn.appendNamespaceToKey(key), start, stop)
+}
+
+func (rn *redisNamespace) ZRevRangeByScore(ctx context.Context, key string, opt *redis.ZRangeBy) *redis.StringSliceCmd {
+	return rn.ZRevRangeByScore(ctx, rn.appendNamespaceToKey(key), opt)
+}
+
+func (rn *redisNamespace) ZRevRangeByLex(ctx context.Context, key string, opt *redis.ZRangeBy) *redis.StringSliceCmd {
+	return rn.ZRevRangeByLex(ctx, rn.appendNamespaceToKey(key), opt)
+}
+
+func (rn *redisNamespace) ZRevRangeByScoreWithScores(ctx context.Context, key string, opt *redis.ZRangeBy) *redis.ZSliceCmd {
+	return rn.ZRevRangeByScoreWithScores(ctx, rn.appendNamespaceToKey(key), opt)
+}
+
+func (rn *redisNamespace) ZRevRank(ctx context.Context, key, member string) *redis.IntCmd {
+	return rn.ZRevRank(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) ZScore(ctx context.Context, key, member string) *redis.FloatCmd {
+	return rn.ZScore(ctx, rn.appendNamespaceToKey(key), member)
+}
+
+func (rn *redisNamespace) ZUnionStore(ctx context.Context, dest string, store *redis.ZStore) *redis.IntCmd {
+	store.Keys = rn.appendNamespaceToKeys(store.Keys)
+	return rn.ZUnionStore(ctx, rn.appendNamespaceToKey(dest), store)
+}
+
+func (rn *redisNamespace) Do(ctx context.Context, args ...interface{}) *redis.Cmd {
+	return rn.Do(ctx, args...)
+}
+func (rn *redisNamespace) Process(ctx context.Context, cmd redis.Cmder) error {
+	return rn.Process(ctx, cmd)
+}
+func (rn *redisNamespace) Close() error {
+	return rn.Close()
+}
+func (rn *redisNamespace) Discard() error {
+	return rn.Discard()
+}
+func (rn *redisNamespace) Exec(ctx context.Context) ([]redis.Cmder, error) {
+	return rn.Exec(ctx)
+}
+func (rn *redisNamespace) Auth(ctx context.Context, password string) *redis.StatusCmd {
+	return rn.Auth(ctx, password)
+}
+func (rn *redisNamespace) AuthACL(ctx context.Context, username, password string) *redis.StatusCmd {
+	return rn.AuthACL(ctx, username, password)
+}
+func (rn *redisNamespace) Select(ctx context.Context, index int) *redis.StatusCmd {
+	return rn.Select(ctx, index)
+}
+func (rn *redisNamespace) SwapDB(ctx context.Context, index1, index2 int) *redis.StatusCmd {
+	return rn.SwapDB(ctx, index1, index2)
+}
+func (rn *redisNamespace) ClientSetName(ctx context.Context, name string) *redis.BoolCmd {
+	return rn.ClientSetName(ctx, name)
 }
 
 func (rn *redisNamespace) appendNamespaceToKey(key string) string {
